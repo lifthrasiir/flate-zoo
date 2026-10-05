@@ -37,6 +37,18 @@ fn presets() -> Vec<Encoder> {
 }
 
 #[test]
+fn repeated_calls_agree() {
+    let input = input();
+    for enc in presets() {
+        let (first, second) = fresh(|| (enc.compress(&input), enc.compress(&input)));
+        assert_eq!(
+            first, second,
+            "{enc}: second call on the same thread differs"
+        );
+    }
+}
+
+#[test]
 fn independent_of_stack_garbage() {
     let input = input();
     for enc in presets() {

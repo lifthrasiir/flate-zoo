@@ -319,6 +319,20 @@ pub fn all() -> Vec<Unit> {
             // Mirrors vendor/ect/src/CMakeLists.txt: -O3, ZLIB_CONST, SIMD/CRC flags for ECT's zlib
             // (only used by level 1) and multithreading support left on (it only changes
             // `thread_local` into a real TLS, so concurrent calls are safe).
+            //
+            // Zopfli's squeeze.c keeps a match finder and cost model in thread-locals that carry
+            // over to the next call on the same thread (the match finder even points into the
+            // previous, freed input). The CLI runs one call per process; we add a reset function.
+            let squeeze_reset = (
+                "static thread_local SymbolStats st;\n",
+                "static thread_local SymbolStats st;\n\n\
+                 void ZopfliResetThreadState(void) {\n\
+                 \x20 if (right) MatchFinder_Free(&mf);\n\
+                 \x20 memset(&mf, 0, sizeof(mf));\n\
+                 \x20 right = 0;\n\
+                 \x20 memset(&st, 0, sizeof(st));\n\
+                 }\n",
+            );
             let mut ect = Unit::new("ect")
                 .mixed()
                 .src("vendor/ect/src", &["LzFind.c"])
@@ -329,10 +343,14 @@ pub fn all() -> Vec<Unit> {
                         "deflate.cpp",
                         "katajainen.cpp",
                         "lz77.c",
-                        "squeeze.c",
                         "util.c",
                     ],
                 )
+                .file(patched(
+                    "ect",
+                    "vendor/ect/src/zopfli/squeeze.c",
+                    &[squeeze_reset],
+                ))
                 .src(
                     "vendor/ect/src/zlib",
                     &[
@@ -346,6 +364,8 @@ pub fn all() -> Vec<Unit> {
                     ],
                 )
                 .inc("vendor/ect/src")
+                // for the patched squeeze.c's own includes ("util.h", "../LzFind.h", ...)
+                .inc("vendor/ect/src/zopfli")
                 .inc("vendor/ect/src/zlib")
                 .def("ZLIB_CONST", None)
                 .flag("-O3")

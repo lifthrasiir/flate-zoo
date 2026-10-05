@@ -6,6 +6,9 @@
 #include "zopfli/deflate.h"
 #include "zlib.h"
 
+/* Added to squeeze.c by build/units.rs. */
+extern "C" void ZopfliResetThreadState(void);
+
 extern "C" int FZ_ENTRY(run)(FZ_ARGS) {
     if (nparams != 3) return FZ_EPARAM;
     long long level = params[0], iters = params[1], twice = params[2];
@@ -44,6 +47,8 @@ extern "C" int FZ_ENTRY(run)(FZ_ARGS) {
      * without clearing, so hand it an already zeroed buffer. */
     if (in_len == 0 && !(buf = (unsigned char *)calloc(10, 1))) return FZ_ENOMEM;
     ZopfliDeflate(&o, 1, in, in_len, &bp, &buf, &n);
+    /* Back to the state of a fresh thread, so that the next call does not depend on this one. */
+    ZopfliResetThreadState();
     if (!buf) return FZ_ENOMEM;
     *out = buf;
     *out_len = n;
