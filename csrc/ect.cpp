@@ -40,6 +40,9 @@ extern "C" int FZ_ENTRY(run)(FZ_ARGS) {
     unsigned char bp = 0;
     unsigned char *buf = NULL;
     size_t n = 0;
+    /* For empty input ZopfliDeflate reallocs `buf` to 10 bytes and ORs the bits into them
+     * without clearing, so hand it an already zeroed buffer. */
+    if (in_len == 0 && !(buf = (unsigned char *)calloc(10, 1))) return FZ_ENOMEM;
     ZopfliDeflate(&o, 1, in, in_len, &bp, &buf, &n);
     if (!buf) return FZ_ENOMEM;
     *out = buf;

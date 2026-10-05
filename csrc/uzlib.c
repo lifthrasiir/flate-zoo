@@ -11,7 +11,14 @@ int FZ_ENTRY(run)(FZ_ARGS) {
     c.hash_table = calloc((size_t)1 << c.hash_bits, sizeof(uzlib_hash_entry_t));
     if (!c.hash_table) return FZ_ENOMEM;
     zlib_start_block(&c);
-    uzlib_compress(&c, in, (unsigned)in_len);
+    /* uzlib_compress computes `in + in_len - 3` up front, which wraps around for short inputs
+     * at low addresses (e.g. Rust's dangling pointer for an empty slice) and then reads from it.
+     * Such inputs are all literals anyway. */
+    if (in_len < 3) {
+        for (size_t i = 0; i < in_len; ++i) zlib_literal(&c, in[i]);
+    } else {
+        uzlib_compress(&c, in, (unsigned)in_len);
+    }
     zlib_finish_block(&c);
     free(c.hash_table);
     if (!c.outbuf) c.outbuf = malloc(1);

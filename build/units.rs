@@ -42,6 +42,7 @@ fn zlib_ng_headers() -> PathBuf {
 pub fn all() -> Vec<Unit> {
     let zlib_srcs = ["adler32.c", "crc32.c", "deflate.c", "trees.c", "zutil.c"];
     let is_x86 = std::env::var("CARGO_CFG_TARGET_ARCH").is_ok_and(|a| a == "x86_64" || a == "x86");
+    let is_aarch64 = std::env::var("CARGO_CFG_TARGET_ARCH").is_ok_and(|a| a == "aarch64");
 
     let mut cloudflare = Unit::new("zlib-cloudflare")
         .src("vendor/zlib-cloudflare", &zlib_srcs)
@@ -55,6 +56,16 @@ pub fn all() -> Vec<Unit> {
             .def("HAS_SSE2", None)
             .flag("-msse4.2");
     }
+    // Cloudflare's crc32.c (and deflate.c's hash) use ARMv8 CRC32 intrinsics unconditionally on
+    // aarch64, which GCC only accepts when the extension is enabled.
+    let aarch64_crc = |u: Unit| {
+        if is_aarch64 {
+            u.flag("-march=armv8-a+crc")
+        } else {
+            u
+        }
+    };
+    let cloudflare = aarch64_crc(cloudflare);
     let cloudflare_generic_deflate = patched(
         "zlib-cloudflare-generic",
         "vendor/zlib-cloudflare/deflate.c",
@@ -82,15 +93,17 @@ pub fn all() -> Vec<Unit> {
             .def("CHROMIUM_ZLIB_NO_CASTAGNOLI", None)
             .shim("csrc/zlib_family.c"),
         cloudflare,
-        Unit::new("zlib-cloudflare-generic")
-            .feature("zlib-cloudflare")
-            .src(
-                "vendor/zlib-cloudflare",
-                &["adler32.c", "crc32.c", "trees.c", "zutil.c"],
-            )
-            .file(cloudflare_generic_deflate)
-            .inc("vendor/zlib-cloudflare")
-            .shim("csrc/zlib_family.c"),
+        aarch64_crc(
+            Unit::new("zlib-cloudflare-generic")
+                .feature("zlib-cloudflare")
+                .src(
+                    "vendor/zlib-cloudflare",
+                    &["adler32.c", "crc32.c", "trees.c", "zutil.c"],
+                )
+                .file(cloudflare_generic_deflate)
+                .inc("vendor/zlib-cloudflare")
+                .shim("csrc/zlib_family.c"),
+        ),
         Unit::new("zlib-ng")
             .src(
                 "vendor/zlib-ng",
@@ -330,7 +343,7 @@ pub fn all() -> Vec<Unit> {
                     .def("HAS_PCLMUL", None)
                     .flag("-mpclmul")
                     .flag("-msse4.2")
-            } else if std::env::var("CARGO_CFG_TARGET_ARCH").is_ok_and(|a| a == "aarch64") {
+            } else if is_aarch64 {
                 ect.def("ADLER32_SIMD_NEON", None)
                     .flag("-march=armv8-a+crc")
             } else {
