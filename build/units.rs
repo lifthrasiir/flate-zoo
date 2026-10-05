@@ -44,8 +44,20 @@ pub fn all() -> Vec<Unit> {
     let is_x86 = std::env::var("CARGO_CFG_TARGET_ARCH").is_ok_and(|a| a == "x86_64" || a == "x86");
     let is_aarch64 = std::env::var("CARGO_CFG_TARGET_ARCH").is_ok_and(|a| a == "aarch64");
 
+    // Cloudflare's fill_window() only slides the hash chains with NEON or SSE2 and silently skips
+    // them otherwise, corrupting every stream longer than the window. This adds the scalar path.
+    let slide_fallback = (
+        "            }\n\n#endif\n            more += wsize;",
+        "            }\n\n#else\n\n            for (i = 0; i < (int)n; i++)\n                s->head[i] = (Pos)(s->head[i] >= wsize ? s->head[i] - wsize : NIL);\n            for (i = 0; i < (int)wsize; i++)\n                s->prev[i] = (Pos)(s->prev[i] >= wsize ? s->prev[i] - wsize : NIL);\n\n#endif\n            more += wsize;",
+    );
+    let cloudflare_srcs = ["adler32.c", "crc32.c", "trees.c", "zutil.c"];
     let mut cloudflare = Unit::new("zlib-cloudflare")
-        .src("vendor/zlib-cloudflare", &zlib_srcs)
+        .src("vendor/zlib-cloudflare", &cloudflare_srcs)
+        .file(patched(
+            "zlib-cloudflare",
+            "vendor/zlib-cloudflare/deflate.c",
+            &[slide_fallback],
+        ))
         .inc("vendor/zlib-cloudflare")
         .shim("csrc/zlib_family.c");
     if is_x86 {
@@ -69,10 +81,13 @@ pub fn all() -> Vec<Unit> {
     let cloudflare_generic_deflate = patched(
         "zlib-cloudflare-generic",
         "vendor/zlib-cloudflare/deflate.c",
-        &[(
-            "#ifdef __aarch64__\n\n#include <arm_neon.h>\n#include <arm_acle.h>\nstatic uint32_t hash_func",
-            "#ifdef __aarch64__\n#include <arm_neon.h>\n#endif\n#if 0\nstatic uint32_t hash_func",
-        )],
+        &[
+            (
+                "#ifdef __aarch64__\n\n#include <arm_neon.h>\n#include <arm_acle.h>\nstatic uint32_t hash_func",
+                "#ifdef __aarch64__\n#include <arm_neon.h>\n#endif\n#if 0\nstatic uint32_t hash_func",
+            ),
+            slide_fallback,
+        ],
     );
 
     vec![
@@ -96,10 +111,7 @@ pub fn all() -> Vec<Unit> {
         aarch64_crc(
             Unit::new("zlib-cloudflare-generic")
                 .feature("zlib-cloudflare")
-                .src(
-                    "vendor/zlib-cloudflare",
-                    &["adler32.c", "crc32.c", "trees.c", "zutil.c"],
-                )
+                .src("vendor/zlib-cloudflare", &cloudflare_srcs)
                 .file(cloudflare_generic_deflate)
                 .inc("vendor/zlib-cloudflare")
                 .shim("csrc/zlib_family.c"),
