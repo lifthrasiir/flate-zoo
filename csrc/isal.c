@@ -15,44 +15,46 @@ int FZ_ENTRY(run)(FZ_ARGS) {
     size_t chunk = (size_t)params[1] * 1024;
     int stateless = params[2] != 0;
 
-    struct isal_zstream s;
+    /* Zeroed because isal_deflate_init leaves next_in/avail_in uninitialized and the loop below
+     * reads avail_in first; on the heap because it is ~80 KiB, too much for arbitrary threads. */
+    struct isal_zstream *s = calloc(1, sizeof *s);
     uint8_t *lb = malloc(lvl_buf_size[level]);
-    if (!lb) return FZ_ENOMEM;
-    isal_deflate_init(&s);
-    s.level = level;
-    s.level_buf = lb;
-    s.level_buf_size = lvl_buf_size[level];
-    s.gzip_flag = IGZIP_DEFLATE;
-    s.flush = NO_FLUSH;
+    if (!s || !lb) { free(s); free(lb); return FZ_ENOMEM; }
+    isal_deflate_init(s);
+    s->level = level;
+    s->level_buf = lb;
+    s->level_buf_size = lvl_buf_size[level];
+    s->gzip_flag = IGZIP_DEFLATE;
+    s->flush = NO_FLUSH;
 
     int rc = FZ_ELIB;
     size_t cap = in_len + in_len / 2 + 4096, len = 0;
     uint8_t *buf = malloc(cap);
-    if (!buf) { free(lb); return FZ_ENOMEM; }
+    if (!buf) { free(lb); free(s); return FZ_ENOMEM; }
 
     if (stateless) {
-        isal_deflate_stateless_init(&s);
-        s.level = level;
-        s.level_buf = lb;
-        s.level_buf_size = lvl_buf_size[level];
-        s.gzip_flag = IGZIP_DEFLATE;
-        s.flush = NO_FLUSH;
-        s.next_in = (uint8_t *)in;
-        s.avail_in = (uint32_t)in_len;
-        s.end_of_stream = 1;
-        s.next_out = buf;
-        s.avail_out = (uint32_t)cap;
-        if (isal_deflate_stateless(&s) != COMP_OK || s.avail_in != 0) goto done;
-        len = s.total_out;
+        isal_deflate_stateless_init(s);
+        s->level = level;
+        s->level_buf = lb;
+        s->level_buf_size = lvl_buf_size[level];
+        s->gzip_flag = IGZIP_DEFLATE;
+        s->flush = NO_FLUSH;
+        s->next_in = (uint8_t *)in;
+        s->avail_in = (uint32_t)in_len;
+        s->end_of_stream = 1;
+        s->next_out = buf;
+        s->avail_out = (uint32_t)cap;
+        if (isal_deflate_stateless(s) != COMP_OK || s->avail_in != 0) goto done;
+        len = s->total_out;
     } else {
         size_t pos = 0;
         for (;;) {
-            if (s.avail_in == 0) {
+            if (s->avail_in == 0) {
                 size_t n = in_len - pos < chunk ? in_len - pos : chunk;
-                s.next_in = (uint8_t *)in + pos;
-                s.avail_in = (uint32_t)n;
+                s->next_in = (uint8_t *)in + pos;
+                s->avail_in = (uint32_t)n;
                 pos += n;
-                s.end_of_stream = pos >= in_len;
+                s->end_of_stream = pos >= in_len;
             }
             if (cap - len < 65536) {
                 uint8_t *nb = realloc(buf, cap * 2);
@@ -60,11 +62,11 @@ int FZ_ENTRY(run)(FZ_ARGS) {
                 buf = nb;
                 cap *= 2;
             }
-            s.next_out = buf + len;
-            s.avail_out = (uint32_t)(cap - len);
-            if (isal_deflate(&s) != COMP_OK) goto done;
-            len = (size_t)(s.next_out - buf);
-            if (s.avail_in == 0 && pos >= in_len && s.avail_out != 0) break;
+            s->next_out = buf + len;
+            s->avail_out = (uint32_t)(cap - len);
+            if (isal_deflate(s) != COMP_OK) goto done;
+            len = (size_t)(s->next_out - buf);
+            if (s->avail_in == 0 && pos >= in_len && s->avail_out != 0) break;
         }
     }
     if (len == 0) goto done;
@@ -75,5 +77,6 @@ int FZ_ENTRY(run)(FZ_ARGS) {
 done:
     free(buf);
     free(lb);
+    free(s);
     return rc;
 }
