@@ -20,7 +20,14 @@ tar_at() { # name url [strip]
   [ -d "$V/$1" ] && return 0
   echo "fetching $1 from $2" >&2
   tmp="$V/.$1.tmp"; rm -rf "$tmp"; mkdir -p "$tmp"
-  curl -fsSL "$2" | tar -xf - -C "$tmp" --strip-components "${3:-1}"
+  # GNU tar does not auto-detect compression on stdin, so name it explicitly.
+  case "$2" in
+    *.xz) z=-J ;;
+    *.gz|*.tgz) z=-z ;;
+    *.bz2) z=-j ;;
+    *) z= ;;
+  esac
+  curl -fsSL "$2" | tar -x $z -f - -C "$tmp" --strip-components "${3:-1}"
   echo "$2" > "$tmp/.fetched-rev"
   mv "$tmp" "$V/$1"
 }
