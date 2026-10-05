@@ -39,6 +39,21 @@ fn zlib_ng_headers() -> PathBuf {
     dir
 }
 
+/// Patches JavaScript sources into OUT_DIR/patched, where `src/js.rs` includes them from.
+pub fn js() {
+    // zlib.js: with lazy matching, a match deferred at the last position that still gets a
+    // lookup is emitted, and then the bytes it covers are emitted again as literals. `q` is
+    // the skip count, which writing the match (`c`) has just set to its length - 2.
+    patched(
+        "js-zlibjs",
+        "vendor/js-zlibjs/bin/rawdeflate.min.js",
+        &[(
+            "if(f+3>=a){x&&c(x,-1);b=0;",
+            "if(f+3>=a){b=0;x&&(c(x,-1),b=q+1);",
+        )],
+    );
+}
+
 pub fn all() -> Vec<Unit> {
     let zlib_srcs = ["adler32.c", "crc32.c", "deflate.c", "trees.c", "zutil.c"];
     let is_x86 = std::env::var("CARGO_CFG_TARGET_ARCH").is_ok_and(|a| a == "x86_64" || a == "x86");

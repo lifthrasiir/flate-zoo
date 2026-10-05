@@ -276,4 +276,7 @@ fn main() {
             s.spawn(build_go);
         }
     });
+    if feature("js") {
+        units::js();
+    }
 }

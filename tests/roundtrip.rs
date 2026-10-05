@@ -52,3 +52,23 @@ fn specs_round_trip() {
     let e: Encoder = "zlib:strategy=rle".parse().unwrap();
     assert_eq!(e.get("strategy"), Some(3));
 }
+
+/// Every preset, but on small inputs only. Ends of inputs are where encoders get careless.
+#[test]
+fn every_preset_round_trips_on_small_inputs() {
+    let text = &include_bytes!("../src/lib.rs")[..3000];
+    let inputs: [&[u8]; 4] = [b"a", b"xyzxyzw", b"abcabcabcabcabd", text];
+    for enc in flate_zoo::presets(Sweep::OneAtATime) {
+        for &input in &inputs {
+            let raw = enc
+                .compress(input)
+                .unwrap_or_else(|e| panic!("{enc} on {} bytes: {e}", input.len()));
+            assert_eq!(
+                inflate(&raw).as_deref(),
+                Ok(input),
+                "{enc} on {} bytes",
+                input.len()
+            );
+        }
+    }
+}

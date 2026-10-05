@@ -180,7 +180,11 @@ js_backend!(
         .sweep(&[0, 4, 8, 16, 32, 64, 128, 258]),
     ],
     [
-        include_str!("../vendor/js-zlibjs/bin/rawdeflate.min.js"),
+        // build/units.rs fixes a bug in lazy matching
+        include_str!(concat!(
+            env!("OUT_DIR"),
+            "/patched/js-zlibjs/rawdeflate.min.js"
+        )),
         include_str!("../js/zlibjs.js"),
     ]
 );
