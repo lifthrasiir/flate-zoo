@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --check
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+      - uses: Swatinem/rust-cache@v2
+
+      # Upstream sources are pinned by fetch.sh (and go.sum), so they are safe to cache.
+      - name: Cache vendored sources
+        id: vendor-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            vendor
+            go/vendor
+          key: vendor-${{ hashFiles('fetch.sh', 'go/go.mod', 'go/go.sum') }}
+      - name: Fetch vendored sources
+        if: steps.vendor-cache.outputs.cache-hit != 'true'
+        run: ./fetch.sh
+
+      - run: cargo clippy --release --all-targets -- -D warnings
+      - run: cargo test --release
+
+  # Every feature on its own (and none at all), built but not tested. The full powerset is
+  # far too large. `native` is an internal feature implied by the C/C++ and Go backends.
+  features:
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+      - uses: taiki-e/install-action@cargo-hack
+      - uses: Swatinem/rust-cache@v2
+      - name: Cache vendored sources
+        id: vendor-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            vendor
+            go/vendor
+          key: vendor-${{ hashFiles('fetch.sh', 'go/go.mod', 'go/go.sum') }}
+      - name: Fetch vendored sources
+        if: steps.vendor-cache.outputs.cache-hit != 'true'
+        run: ./fetch.sh
+      - run: cargo hack build --all-targets --each-feature --exclude-features native

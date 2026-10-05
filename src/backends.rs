@@ -1,10 +1,21 @@
 //! Registry of all compiled-in backends and the parameter tables of the native ones.
 
+// `go` enables `native` without using it here.
+#[cfg(feature = "native")]
 #[allow(unused_imports)]
 use crate::native::native;
 #[allow(unused_imports)]
 use crate::{Backend, Param};
 
+#[cfg(any(
+    feature = "zlib",
+    feature = "zlib-ng",
+    feature = "zlib-chromium",
+    feature = "zlib-cloudflare",
+    feature = "miniz",
+    feature = "rust",
+    feature = "js"
+))]
 pub(crate) const STRATEGIES: &[(&str, i64)] = &[
     ("default", 0),
     ("filtered", 1),
@@ -14,6 +25,14 @@ pub(crate) const STRATEGIES: &[(&str, i64)] = &[
 ];
 
 /// Parameters of `deflateInit2` in zlib and every API-compatible implementation.
+#[cfg(any(
+    feature = "zlib",
+    feature = "zlib-ng",
+    feature = "zlib-chromium",
+    feature = "zlib-cloudflare",
+    feature = "rust",
+    feature = "js"
+))]
 pub(crate) const ZLIB_PARAMS: &[Param] = &[
     Param::new("level", 6, 0, 9, "compression level"),
     Param::new("wbits", 15, 9, 15, "log2 of the window size"),
@@ -23,6 +42,12 @@ pub(crate) const ZLIB_PARAMS: &[Param] = &[
 
 /// [`ZLIB_PARAMS`] plus the buffer sizes of each `deflate()` call (see csrc/zlib_family.c).
 /// They only matter for stored blocks (level 0), which zlib sizes after avail_in/avail_out.
+#[cfg(any(
+    feature = "zlib",
+    feature = "zlib-ng",
+    feature = "zlib-chromium",
+    feature = "zlib-cloudflare"
+))]
 pub(crate) const ZLIB_STREAM_PARAMS: &[Param] = &[
     ZLIB_PARAMS[0],
     ZLIB_PARAMS[1],

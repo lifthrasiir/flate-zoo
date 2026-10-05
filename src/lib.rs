@@ -19,6 +19,7 @@ mod backends;
 mod go;
 #[cfg(feature = "js")]
 mod js;
+#[cfg(feature = "native")]
 mod native;
 #[cfg(feature = "rust")]
 mod rust;

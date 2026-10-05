@@ -156,13 +156,15 @@ pub static DEFLATE_RS: RustBackend = RustBackend {
     ],
     compress: |input, v| {
         use deflate_rs::{CompressionOptions, MatchingType};
-        let mut o = CompressionOptions::default();
-        o.max_hash_checks = v[0] as u16;
-        o.lazy_if_less_than = v[1] as u16;
-        o.matching_type = if v[2] == 0 {
-            MatchingType::Greedy
-        } else {
-            MatchingType::Lazy
+        let o = CompressionOptions {
+            max_hash_checks: v[0] as u16,
+            lazy_if_less_than: v[1] as u16,
+            matching_type: if v[2] == 0 {
+                MatchingType::Greedy
+            } else {
+                MatchingType::Lazy
+            },
+            ..Default::default()
         };
         Ok(deflate_rs::deflate_bytes_conf(input, o))
     },
