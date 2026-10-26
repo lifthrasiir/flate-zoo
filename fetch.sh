@@ -44,6 +44,8 @@ git_at zlib          https://github.com/madler/zlib                v1.3.1
 git_at zlib-ng       https://github.com/zlib-ng/zlib-ng            2.3.3
 git_at zlib-chromium https://chromium.googlesource.com/chromium/src/third_party/zlib 456ae730017b9b4bd3371927abc82627fd51feef
 git_at zlib-cloudflare https://github.com/cloudflare/zlib          3944b7d59cf50aa144d8bba69809edea072161d4
+# Its Cargo.toml (an unused Rust wrapper) would make `cargo package` skip the whole directory.
+rm -f "$V/zlib-cloudflare/Cargo.toml"
 git_at libdeflate    https://github.com/ebiggers/libdeflate        v1.26
 git_at zopfli        https://github.com/google/zopfli              df1517dd8518113a245e4d203a04b8a0e02ab493
 git_at miniz         https://github.com/richgel999/miniz           3.1.2
@@ -65,3 +67,43 @@ npm_at js-uzip       uzip@0.20201231.0
 npm_at js-zlibjs     zlibjs@0.3.1
 
 (cd go && go mod vendor)
+
+# The `go` backend: go/wasm built for wasip1 by the toolchain pinned in go/go.mod, then translated
+# to C by a pinned wasm2c, so that building the crate only needs a C compiler. The wasm2c
+# runtime comes from the same wabt release, whose LICENSE (Apache-2.0) is fetched alongside.
+WABT=1.0.42
+wabt() {
+  d="$V/.tools/wabt-$WABT"
+  if [ ! -x "$d/bin/wasm2c" ]; then
+    case "$(uname -s)-$(uname -m)" in
+      Linux-x86_64) p=linux-x64 ;;
+      Linux-aarch64|Linux-arm64) p=linux-arm64 ;;
+      Darwin-arm64) p=macos-arm64 ;;
+      *) echo "no wabt $WABT release binary for this platform" >&2; exit 1 ;;
+    esac
+    echo "fetching wabt $WABT ($p)" >&2
+    rm -rf "$d.tmp"; mkdir -p "$d.tmp"
+    curl -fsSL "https://github.com/WebAssembly/wabt/releases/download/$WABT/wabt-$WABT-$p.tar.gz" \
+      | tar -xzf - -C "$d.tmp" --strip-components 1
+    mv "$d.tmp" "$d"
+  fi
+  echo "$d"
+}
+if [ ! -d "$V/go-wasm2c" ]; then
+  echo "generating go-wasm2c" >&2
+  w="$(wabt)"
+  tmp="$V/.go-wasm2c.tmp"; rm -rf "$tmp"; mkdir -p "$tmp"
+  (cd go && GOOS=wasip1 GOARCH=wasm GOFLAGS=-mod=vendor \
+    go build -trimpath -buildmode=c-shared -ldflags=-s -o "../$tmp/fz_go.wasm" ./wasm)
+  # Go imports fd_write twice, which wasm2c warns about; the duplicate is harmless.
+  "$w/bin/wasm2c" --num-outputs=16 -n fz_go -o "$tmp/fz_go.c" "$tmp/fz_go.wasm" 2>/dev/null
+  rm "$tmp/fz_go.wasm"
+  cp "$w/include/wasm-rt.h" "$w/include/wasm-rt-exceptions.h" "$w/share/wabt/wasm2c/wasm-rt-impl.h" \
+    "$w/share/wabt/wasm2c/wasm-rt-impl.c" "$w/share/wabt/wasm2c/wasm-rt-mem-impl.c" \
+    "$w/share/wabt/wasm2c/wasm-rt-exceptions-impl.c" \
+    "$w/share/wabt/wasm2c/wasm-rt-mem-impl-helper.inc" \
+    "$w/share/wabt/wasm2c/wasm-rt-impl-tableops.inc" "$tmp/"
+  curl -fsSL "https://raw.githubusercontent.com/WebAssembly/wabt/$WABT/LICENSE" > "$tmp/LICENSE"
+  printf '%s\nwasm2c %s\n' "$(cd go && go env GOVERSION)" "$WABT" > "$tmp/.fetched-rev"
+  mv "$tmp" "$V/go-wasm2c"
+fi

@@ -1,6 +1,6 @@
 //! Registry of all compiled-in backends and the parameter tables of the native ones.
 
-// `go` enables `native` without using it here.
+// `go` and `go-native` enable `native` without using it here.
 #[cfg(feature = "native")]
 #[allow(unused_imports)]
 use crate::native::native;
@@ -475,6 +475,10 @@ static BACKENDS: &[&dyn Backend] = &[
     &crate::go::GO,
     #[cfg(feature = "go")]
     &crate::go::GO_KLAUSPOST,
+    #[cfg(feature = "go-native")]
+    &crate::go::GO_NATIVE,
+    #[cfg(feature = "go-native")]
+    &crate::go::GO_KLAUSPOST_NATIVE,
     #[cfg(feature = "gzip")]
     &GZIP,
     #[cfg(feature = "infozip")]

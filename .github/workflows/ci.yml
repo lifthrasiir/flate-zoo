@@ -40,7 +40,8 @@ jobs:
           cache-dependency-path: go/go.sum
       - uses: Swatinem/rust-cache@v2
 
-      # Upstream sources are pinned by fetch.sh (and go.sum), so they are safe to cache.
+      # Upstream sources are pinned by fetch.sh (and go.sum), so they are safe to cache. The key
+      # includes the Go sources because fetch.sh also generates vendor/go-wasm2c from them.
       - name: Cache vendored sources
         id: vendor-cache
         uses: actions/cache@v4
@@ -48,13 +49,18 @@ jobs:
           path: |
             vendor
             go/vendor
-          key: vendor-${{ hashFiles('fetch.sh', 'go/go.mod', 'go/go.sum') }}
+          key: vendor-${{ hashFiles('fetch.sh', 'go/go.mod', 'go/go.sum', 'go/**/*.go') }}
       - name: Fetch vendored sources
         if: steps.vendor-cache.outputs.cache-hit != 'true'
         run: ./fetch.sh
 
-      - run: cargo clippy --release --all-targets -- -D warnings
-      - run: cargo test --release
+      - run: cargo clippy --release --all-targets --features go-native -- -D warnings
+      # go-native is the reference that tests/go_native.rs checks the wasm2c translation against.
+      - run: cargo test --release --features go-native
+      # Builds the crate from its packaged files alone, catching vendored files missing from
+      # `include` in Cargo.toml (which headers are needed differs per target).
+      - run: cargo package
+      - run: ls -l target/package/*.crate
 
   # Every feature on its own (and none at all), built but not tested. The full powerset is
   # far too large. `native` is an internal feature implied by the C/C++ and Go backends.
@@ -78,7 +84,7 @@ jobs:
           path: |
             vendor
             go/vendor
-          key: vendor-${{ hashFiles('fetch.sh', 'go/go.mod', 'go/go.sum') }}
+          key: vendor-${{ hashFiles('fetch.sh', 'go/go.mod', 'go/go.sum', 'go/**/*.go') }}
       - name: Fetch vendored sources
         if: steps.vendor-cache.outputs.cache-hit != 'true'
         run: ./fetch.sh

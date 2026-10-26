@@ -39,7 +39,7 @@ so `Sweep::OneAtATime` and `Sweep::Full` can enumerate configurations genericall
 | `miniz`, `miniz-oxide`, `yazi` | miniz 3.1.2 (C), miniz_oxide 0.9.1 and yazi 0.2.1 (Rust) | level 0–10 (+ strategy) |
 | `deflate-rs`, `libflate`, `fdeflate` | Rust crates | crate-specific |
 | `stb`, `lodepng`, `sdefl`, `uzlib`, `libslz` | single-file C libraries | library-specific |
-| `go`, `go-klauspost` | Go `compress/flate` and klauspost/compress 1.20.1 (Go c-archive) | level (+ huffman, stateless) |
+| `go`, `go-klauspost` | Go 1.25.5 `compress/flate` and klauspost/compress 1.20.1, built for wasip1 and translated to C by wasm2c | level (+ huffman, stateless) |
 | `gzip`, `infozip` | GNU gzip 1.14 and Info-ZIP Zip 3.0 deflate, driven through in-memory I/O glue | level 1–9 (+ gzip `rsync`) |
 | `isa-l` | Intel ISA-L 2.32.1 igzip, portable C base functions | level 0–3, chunk_kib, stateless |
 | `7zip` | 7-Zip 26.03 DeflateEncoder | level, passes, fb, mc, algo |
@@ -53,16 +53,28 @@ Run `flate-zoo list` for the exact parameter ranges and defaults.
 
 ## Building
 
-Requirements: a C/C++ compiler, `nm`, Go (for the `go` feature) and network access for
-the first fetch.
+The crates.io package carries every vendored source it needs, so it only requires a C/C++
+compiler (GCC or Clang; MSVC is not supported) and `nm` (override with `NM`):
 
 ```
-git clone https://github.com/lifthrasiir/flate-zoo.git    # no cargo, sorry
+cargo install flate-zoo     # or: cargo add flate-zoo
+```
+
+A git checkout has to fetch them first, which needs `git`, `curl`, `npm`, Go and network access:
+
+```
+git clone https://github.com/lifthrasiir/flate-zoo.git
 cd flate-zoo
-./fetch.sh          # pinned upstream sources into vendor/, plus `go mod vendor` in go/
+./fetch.sh          # pinned upstream sources into vendor/, `go mod vendor`, Go via wasm2c
 cargo build --release
 cargo test --release
 ```
+
+`fetch.sh` builds the `go` backend to WebAssembly with the toolchain pinned in `go/go.mod` and
+translates it to C with a pinned wasm2c (downloaded into `vendor/.tools`), so only `fetch.sh`
+needs Go. The non-default `go-native` feature links the same Go code as a c-archive, which needs
+Go at build time; it is the reference for `go` (`tests/go_native.rs`). `cargo package` only
+picks the vendored files listed in `include` in `Cargo.toml`, and builds the result to check.
 
 Every backend is a cargo feature and all of them are on by default. C units are compiled twice:
 the first pass collects their global symbols with `nm`, and the second force-includes a header
@@ -85,6 +97,8 @@ repetitive data, a 1-byte file and a 5 MB file:
 - `7zip`: matches a real `7zz` (Alone2) on `-mx`, `-mfb`, `-mpass`, `-mmc` and `-ma` variations.
 - `advancecomp-7z`: matches AdvanceCOMP's `compress_rfc1950_7z`.
 - `ect`: matches ECT's own `ZopfliGzip` path at levels 1–9 and with iteration overrides.
+- `go`, `go-klauspost`: match `go-native`/`go-klauspost-native` (`tests/go_native.rs`) at
+  every level.
 - `fflate`, `pako`, `uzip`, `zlibjs`: match node running the same vendored files. `pako`
   (a zlib 1.2.8 port) is byte-identical to `zlib` in every case tried.
 - `cryptopp`: no reference comparison yet; it uses the unmodified upstream `Deflator`.
@@ -99,7 +113,8 @@ repetitive data, a 1-byte file and a 5 MB file:
 - **Some output depends on the CPU or the build.** Cloudflare's hash depends on the target,
   hence the two variants. ISA-L is built from its portable C, and its asm paths are not
   documented to produce the same streams. ECT's level 1 uses a Chromium-derived zlib with CRC
-  hashing. The output of `go` follows the installed Go toolchain.
+  hashing. The output of `go-native` follows the installed Go toolchain, while `go` is
+  fixed to the one pinned in `go/go.mod`.
 - stb, sdefl, lodepng (stored or fixed) and uzip level 0 emit nothing at all for empty input. This
   is surfaced as `Error::Encode`, and `apple` rejects empty input. zlibjs `type=none|fixed` emits
   a truncated stream for empty input (node does the same), so the round-trip check fails there.
@@ -114,13 +129,41 @@ Zig's `std.compress.flate`, .NET's and Java's managed ports (they are zlib or zl
 underneath anyway), Nim zippy, OCaml decompress, PuTTY's own encoder (uzlib is derived from it),
 older zlib releases, and closed-source tools (kzip, PNGOUT, PKZIP, WinRAR).
 
-## Parting matter
+## Licenses
 
-The code proper in this repository is released into the public domain (or MIT-0 license).
-**This does not mean that you are completely free to use this crate though!** For example,
-the `gzip` backend compiles GNU gzip, which is GPL-3, so any binary built with the default
-features is GPL-3. Build with `--no-default-features` and a feature list without `gzip`
-if that matters.
+The code proper in this repository is released into the public domain (or MIT-0 license, see
+`LICENSE.txt`). **This does not mean that you are completely free to use this crate though!**
+For example, the `gzip` backend compiles GNU gzip, which is GPL-3, so any binary built with the
+default features is GPL-3. Build with `--no-default-features` and a feature list without `gzip`
+if that matters. The `license` field in `Cargo.toml` is the conjunction of everything below.
+
+| feature | license (SPDX) | file |
+|---|---|---|
+| `zlib` | Zlib | `LICENSE.zlib.txt` |
+| `zlib-ng` | Zlib | `LICENSE.zlib-ng.txt` |
+| `zlib-chromium` | Zlib AND BSD-3-Clause | `LICENSE.zlib-chromium.txt` |
+| `zlib-cloudflare` | Zlib | `LICENSE.zlib-cloudflare.txt` |
+| `libdeflate` | MIT | `LICENSE.libdeflate.txt` |
+| `zopfli` | Apache-2.0 | `LICENSE.zopfli.txt` |
+| `miniz` | MIT | `LICENSE.miniz.txt` |
+| `stb` | MIT OR Unlicense | `LICENSE.stb.txt` |
+| `lodepng` | Zlib | `LICENSE.lodepng.txt` |
+| `sdefl` | MIT OR Unlicense | `LICENSE.sdefl.txt` |
+| `uzlib` | Zlib | `LICENSE.uzlib.txt` |
+| `libslz` | MIT | `LICENSE.libslz.txt` |
+| `gzip` | GPL-3.0-or-later | `LICENSE.gzip.txt` |
+| `infozip` | Info-ZIP | `LICENSE.infozip.txt` |
+| `isa-l` | BSD-3-Clause | `LICENSE.isa-l.txt` |
+| `7zip` | LGPL-2.1-or-later (the C/ parts are public domain) | `LICENSE.7zip.txt` |
+| `advancecomp-7z` | LGPL-2.1-or-later | `LICENSE.advancecomp-7z.txt` |
+| `cryptopp` | BSL-1.0 | `LICENSE.cryptopp.txt` |
+| `ect` | Apache-2.0 AND Zlib AND BSD-3-Clause | `LICENSE.ect.txt` |
+| `go`, `go-native` | BSD-3-Clause (Go, klauspost/compress); `go` adds Apache-2.0 (wasm2c runtime) | `LICENSE.go.txt`, `LICENSE.klauspost-compress.txt`, `LICENSE.wabt.txt` |
+| `js` | MIT (fflate, UZIP.js, zlib.js), MIT AND Zlib (pako) | `LICENSE.fflate.txt`, `LICENSE.pako.txt`, `LICENSE.uzip.txt`, `LICENSE.zlibjs.txt` |
+
+Crates pulled in by the `rust` and `js` features have their own licenses, as usual.
+
+## Parting matter
 
 Claude Opus 5.5 was used to one-shot this crate out of thin air. The purported author,
 Kang Seonghoon, only gave a single-line prompt (and this paragraph). What a life.

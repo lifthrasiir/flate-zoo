@@ -234,8 +234,9 @@ fn build_unit(u: &Unit) {
     }
 }
 
-fn build_go() {
-    let out = out_dir().join("go");
+/// The `go-native` reference: go/ as a c-archive, which needs a Go toolchain.
+fn build_go_native() {
+    let out = out_dir().join("go-native");
     fs::create_dir_all(&out).unwrap();
     let go = env::var("GO").unwrap_or_else(|_| "go".into());
     let status = Command::new(&go)
@@ -243,13 +244,13 @@ fn build_go() {
         .env("CGO_ENABLED", "1")
         .env("GOFLAGS", "-mod=vendor")
         .args(["build", "-trimpath", "-buildmode=c-archive", "-o"])
-        .arg(out.join("libfz_go.a"))
+        .arg(out.join("libfz_go_native.a"))
         .arg(".")
         .status()
         .unwrap_or_else(|e| panic!("cannot run {go}: {e}"));
     assert!(status.success(), "go build failed");
     println!("cargo:rustc-link-search=native={}", out.display());
-    println!("cargo:rustc-link-lib=static=fz_go");
+    println!("cargo:rustc-link-lib=static=fz_go_native");
     if target_is_apple() {
         println!("cargo:rustc-link-lib=framework=CoreFoundation");
         println!("cargo:rustc-link-lib=resolv");
@@ -272,8 +273,8 @@ fn main() {
         for u in &units {
             s.spawn(|| build_unit(u));
         }
-        if feature("go") {
-            s.spawn(build_go);
+        if feature("go-native") {
+            s.spawn(build_go_native);
         }
     });
     if feature("js") {

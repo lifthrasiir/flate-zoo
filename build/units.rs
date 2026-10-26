@@ -54,6 +54,47 @@ pub fn js() {
     );
 }
 
+/// Go encoders translated by wasm2c (see fetch.sh and csrc/go.c).
+fn go_wasm2c() -> Unit {
+    let dir = "vendor/go-wasm2c";
+    // The translated module is ~40 MB of C whose symbols all start with `w2c_fz__go` or
+    // `wasm2c_fz__go` already, so it is compiled as shims: once, without the symbol-collecting
+    // pass. The prefix header still reaches it and renames the runtime and WASI host symbols.
+    let mut module: Vec<PathBuf> = fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .map(|e| e.unwrap().path())
+        .filter(|p| {
+            let f = p.file_name().unwrap().to_string_lossy();
+            f.starts_with("fz_go_") && f.ends_with(".c")
+        })
+        .collect();
+    module.sort();
+    if module.is_empty() {
+        // not generated yet; build_unit reports it if the unit is enabled at all
+        module.push(PathBuf::from(dir).join("fz_go_0.c"));
+    }
+    let mut u = Unit::new("go")
+        .src(
+            dir,
+            &[
+                "wasm-rt-impl.c",
+                "wasm-rt-mem-impl.c",
+                "wasm-rt-exceptions-impl.c",
+            ],
+        )
+        .src("csrc/go", &["wasi.c"])
+        .inc(dir)
+        // malloc'ed memory with explicit bounds checks and call depth counting: no mmap
+        // reservations and, above all, no signal handlers installed into the host process.
+        .def("WASM_RT_USE_MMAP", Some("0"))
+        .def("WASM_RT_MEMCHECK_BOUNDS_CHECK", Some("1"))
+        .def("WASM_RT_SKIP_SIGNAL_RECOVERY", Some("1"))
+        .shim("csrc/go.c");
+    u.shims.extend(module);
+    u
+}
+
 pub fn all() -> Vec<Unit> {
     let zlib_srcs = ["adler32.c", "crc32.c", "deflate.c", "trees.c", "zutil.c"];
     let is_x86 = std::env::var("CARGO_CFG_TARGET_ARCH").is_ok_and(|a| a == "x86_64" || a == "x86");
@@ -234,6 +275,7 @@ pub fn all() -> Vec<Unit> {
             .src("vendor/libslz/src", &["slz.c"])
             .inc("vendor/libslz/src")
             .shim("csrc/libslz.c"),
+        go_wasm2c(),
         Unit::new("gzip")
             .src("vendor/gzip", &["deflate.c", "trees.c", "bits.c"])
             .src("csrc/gzip", &["glue.c"])

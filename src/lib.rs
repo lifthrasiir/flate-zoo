@@ -15,7 +15,7 @@ use std::fmt;
 use std::str::FromStr;
 
 mod backends;
-#[cfg(feature = "go")]
+#[cfg(any(feature = "go", feature = "go-native"))]
 mod go;
 #[cfg(feature = "js")]
 mod js;

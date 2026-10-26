@@ -3,7 +3,105 @@ name = "flate-zoo"
 version = "0.1.0"
 edition = "2024"
 description = "A zoo of DEFLATE encoders behind one interface, for DEFLATE research"
-publish = false  # due to the custom build process, this crate can't be published
+repository = "https://github.com/lifthrasiir/flate-zoo"
+readme = "README.md"
+keywords = ["deflate", "zlib", "compression", "recompression"]
+categories = ["compression"]
+# The crate's own code is MIT-0; the rest is what the vendored sources bring in (see README.md
+# and LICENSE.*.txt). GPL-3.0-or-later comes from the `gzip` feature alone.
+license = """\
+    MIT-0 AND Zlib AND MIT AND (MIT OR Unlicense) AND Apache-2.0 AND BSD-3-Clause \
+    AND BSL-1.0 AND LGPL-2.1-or-later AND GPL-3.0-or-later AND Info-ZIP"""
+# vendor/ is populated by fetch.sh and not tracked by git. Only the files the build reads are
+# packaged, by directory where that is cheap and by name where the directory is large. A
+# missing header shows up when `cargo package` builds the packaged crate.
+include = [
+    "/Cargo.toml",
+    "/README.md",
+    "/LICENSE*.txt",
+    "/fetch.sh",
+    "/build.rs",
+    "/build/",
+    "/src/",
+    "/csrc/",
+    "/js/",
+    "/tests/",
+    "/go/*.go",
+    "/go/go.mod",
+    "/go/go.sum",
+    "/go/fz/",
+    "/go/wasm/",
+    "/go/vendor/",
+    "/vendor/*/.fetched-rev",
+    "/vendor/zlib/*.[ch]",
+    "/vendor/zlib-ng/*.[ch]",
+    "/vendor/zlib-ng/*.h.in",
+    "/vendor/zlib-ng/zlib_name_mangling.h.empty",
+    "/vendor/zlib-ng/arch/generic/*.[ch]",
+    "/vendor/zlib-chromium/*.[ch]",
+    "/vendor/zlib-chromium/contrib/optimizations/*.h",
+    "/vendor/zlib-cloudflare/*.[ch]",
+    "/vendor/libdeflate/*.h",
+    "/vendor/libdeflate/lib/*.[ch]",
+    "/vendor/libdeflate/lib/arm/*.[ch]",
+    "/vendor/libdeflate/lib/x86/*.[ch]",
+    "/vendor/zopfli/src/zopfli/*.[ch]",
+    "/vendor/miniz/*.[ch]",
+    "/vendor/stb/stb_image_write.h",
+    "/vendor/lodepng/lodepng.cpp",
+    "/vendor/lodepng/lodepng.h",
+    "/vendor/vurtun-lib/sdefl.h",
+    "/vendor/uzlib/src/*.[ch]",
+    "/vendor/libslz/src/*.[ch]",
+    "/vendor/gzip/*.[ch]",
+    "/vendor/infozip/*.h",
+    "/vendor/infozip/deflate.c",
+    "/vendor/infozip/trees.c",
+    "/vendor/infozip/unix/*.h",
+    "/vendor/isa-l/include/*.h",
+    "/vendor/isa-l/igzip/*.[ch]",
+    "/vendor/isa-l/crc/*.[ch]",
+    "/vendor/7zip/C/*.h",
+    "/vendor/7zip/C/Alloc.c",
+    "/vendor/7zip/C/CpuArch.c",
+    "/vendor/7zip/C/HuffEnc.c",
+    "/vendor/7zip/C/LzFind.c",
+    "/vendor/7zip/C/Sort.c",
+    "/vendor/7zip/CPP/Common/*.h",
+    "/vendor/7zip/CPP/7zip/*.h",
+    "/vendor/7zip/CPP/7zip/Common/*.h",
+    "/vendor/7zip/CPP/7zip/Common/CWrappers.cpp",
+    "/vendor/7zip/CPP/7zip/Common/OutBuffer.cpp",
+    "/vendor/7zip/CPP/7zip/Common/StreamUtils.cpp",
+    "/vendor/7zip/CPP/7zip/Compress/*.h",
+    "/vendor/7zip/CPP/7zip/Compress/DeflateEncoder.cpp",
+    "/vendor/advancecomp/7z/*.cc",
+    "/vendor/advancecomp/7z/*.h",
+    "/vendor/cryptopp/*.h",
+    "/vendor/cryptopp/algparam.cpp",
+    "/vendor/cryptopp/allocate.cpp",
+    "/vendor/cryptopp/cryptlib.cpp",
+    "/vendor/cryptopp/filters.cpp",
+    "/vendor/cryptopp/fips140.cpp",
+    "/vendor/cryptopp/misc.cpp",
+    "/vendor/cryptopp/mqueue.cpp",
+    "/vendor/cryptopp/queue.cpp",
+    "/vendor/cryptopp/zdeflate.cpp",
+    "/vendor/ect/src/*.h",
+    "/vendor/ect/src/LzFind.c",
+    "/vendor/ect/src/zlib/*.[ch]",
+    "/vendor/ect/src/zopfli/*.[ch]",
+    "/vendor/ect/src/zopfli/*.cpp",
+    "/vendor/go-wasm2c/",
+    "/vendor/js-fflate/umd/index.js",
+    "/vendor/js-pako/dist/pako_deflate.js",
+    "/vendor/js-uzip/UZIP.js",
+    "/vendor/js-zlibjs/bin/rawdeflate.min.js",
+]
+
+[package.metadata.docs.rs]
+# The API does not depend on the backends, so skip compiling all of them.
+no-default-features = true
 
 [features]
 default = [
@@ -15,7 +113,7 @@ default = [
     "ect",
     "isa-l",
 ]
-# Internal: the `csrc/fz.h` calling convention shared by C/C++ and Go backends
+# Internal: the `csrc/fz.h` calling convention shared by the C/C++ and Go backends
 native = []
 # C/C++ units built from vendor/ by build.rs
 zlib = ["native"]
@@ -38,8 +136,10 @@ advancecomp-7z = ["native"]
 cryptopp = ["native"]
 js = ["dep:rquickjs"]
 ect = ["native"]
-# Go compress/flate and klauspost/compress/flate (needs a Go toolchain)
+# Go compress/flate and klauspost/compress/flate, translated to C by fetch.sh (via wasm2c)
 go = ["native"]
+# The same, linked as a Go c-archive (needs a Go toolchain); the reference for `go`
+go-native = ["native"]
 # Apple libcompression (macOS only; ignored elsewhere)
 apple = []
 # Pure Rust encoders
