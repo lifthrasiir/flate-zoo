@@ -1,5 +1,8 @@
 # 🦒🐘🐒 flate-zoo: a zoo of DEFLATE encoders
 
+[![Latest version](https://img.shields.io/crates/v/flate-zoo.svg)](https://crates.io/crates/flate-zoo)
+[![Documentation](https://docs.rs/flate-zoo/badge.svg)](https://docs.rs/flate-zoo)
+
 This crate puts every DEFLATE encoder I could find behind one Rust interface. It is meant as a
 sample generator for DEFLATE recompression research: each backend returns exactly the raw
 DEFLATE stream (RFC 1951, with any zlib or gzip framing stripped) that the real

@@ -1,6 +1,6 @@
 [package]
 name = "flate-zoo"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 description = "A zoo of DEFLATE encoders behind one interface, for DEFLATE research"
 repository = "https://github.com/lifthrasiir/flate-zoo"
