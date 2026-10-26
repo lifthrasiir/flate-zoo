@@ -20,6 +20,7 @@ include = [
     "/README.md",
     "/LICENSE*.txt",
     "/fetch.sh",
+    "/package.sh",
     "/build.rs",
     "/build/",
     "/src/",

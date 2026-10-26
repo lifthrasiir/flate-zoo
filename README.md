@@ -73,8 +73,12 @@ cargo test --release
 `fetch.sh` builds the `go` backend to WebAssembly with the toolchain pinned in `go/go.mod` and
 translates it to C with a pinned wasm2c (downloaded into `vendor/.tools`), so only `fetch.sh`
 needs Go. The non-default `go-native` feature links the same Go code as a c-archive, which needs
-Go at build time; it is the reference for `go` (`tests/go_native.rs`). `cargo package` only
-picks the vendored files listed in `include` in `Cargo.toml`, and builds the result to check.
+Go at build time; it is the reference for `go` (`tests/go_native.rs`).
+
+Package and publish with `./package.sh` and `./package.sh publish`. Only the vendored files
+listed in `include` in `Cargo.toml` are packaged, and the result is built to check that nothing
+is missing. Plain `cargo package` refuses to run because the gitignored vendored files count
+as uncommitted changes; the script checks the tracked files itself and passes `--allow-dirty`.
 
 Every backend is a cargo feature and all of them are on by default. C units are compiled twice:
 the first pass collects their global symbols with `nm`, and the second force-includes a header

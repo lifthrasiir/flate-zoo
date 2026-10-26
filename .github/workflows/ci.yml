@@ -59,7 +59,7 @@ jobs:
       - run: cargo test --release --features go-native
       # Builds the crate from its packaged files alone, catching vendored files missing from
       # `include` in Cargo.toml (which headers are needed differs per target).
-      - run: cargo package
+      - run: ./package.sh
       - run: ls -l target/package/*.crate
 
   # Every feature on its own (and none at all), built but not tested. The full powerset is
