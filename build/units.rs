@@ -390,9 +390,24 @@ pub fn all() -> Vec<Unit> {
                  \x20 memset(&st, 0, sizeof(st));\n\
                  }\n",
             );
+            // LzFind.c's GetMatches2 reads `unsigned` and `uint64_t` through casts of byte pointers
+            // at any offset. GCC 15 vectorises the backward run loop, peeling to what it takes
+            // for a 16-byte boundary by the type's alignment, and faults on its `movdqa`
+            // (https://github.com/fhanau/Efficient-Compression-Tool/issues/145, not fixed there
+            // yet). Read them by memcpy.
+            let lzfind_unaligned = [
+                (
+                    "unsigned starter = *(unsigned*)(cur - 1);",
+                    "unsigned starter; memcpy(&starter, cur - 1, sizeof starter);",
+                ),
+                (
+                    "while (rle_pos > _min && *(uint64_t*)(rle_pos - 8) == starter_full)",
+                    "for (uint64_t w; rle_pos > _min && (memcpy(&w, rle_pos - 8, 8), w == starter_full);)",
+                ),
+            ];
             let mut ect = Unit::new("ect")
                 .mixed()
-                .src("vendor/ect/src", &["LzFind.c"])
+                .file(patched("ect", "vendor/ect/src/LzFind.c", &lzfind_unaligned))
                 .src(
                     "vendor/ect/src/zopfli",
                     &[
